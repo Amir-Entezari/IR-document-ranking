@@ -115,3 +115,40 @@ class OkapiBM25(BaseRankingModel):
             RSV, idx = heapq.heappop(RSV_list)
             results.append([-1 * RSV, idx])
         return results
+
+
+class LanguageModel(BaseRankingModel):
+    def compute_rankings(self, query, k_top, lambd):
+        """
+        This function perform a language model scoring for the given query and tune parameters and return top k
+        relevant documents. First I create a list of 2-tuples with length of all documents to score each documents
+        according to the query and set their score to zero. Then I do the exact algorithm in the slides and set the
+        variables. And I loop over all documents and calculate the formula that provided in slides, then save them in
+        the correspond index in document_probs.
+        """
+        document_probs = [[0, i + 1] for i in range(len(self.inverted_index.documents))]
+        preprocessed_query = preprocess_text(query)
+        T = 0
+        for term in self.inverted_index.posting_list:
+            T += term.cf
+
+        for doc_idx, document in enumerate(self.inverted_index.documents):
+            L_d = len(document.text)
+            for i, term in enumerate(preprocessed_query):
+                t = self.inverted_index.get_term_index(term)
+                tf = document.text.count(term)
+                P_t_M_d = tf / (L_d or 1)
+                P_t_M_c = self.inverted_index.posting_list[t].cf / T
+                P_t_d = lambd * (P_t_M_d) + (1 - lambd) * (P_t_M_c)
+                if i == 0:
+                    document_probs[doc_idx][0] = P_t_d
+                else:
+                    document_probs[doc_idx][0] *= P_t_d
+
+        document_probs = [[-prob, i] for prob, i in document_probs]
+        heapq.heapify(document_probs)
+        results = []
+        for _ in range(k_top):
+            prob, idx = heapq.heappop(document_probs)
+            results.append([-1 * prob, idx])
+        return results
