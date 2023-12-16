@@ -42,6 +42,8 @@ def preprocess_documents(documents):
     Apply text preprocessing to each document in the dictionary.
     """
     preprocessed_docs = []
-    for doc_id, content in enumerate(documents):
-        preprocessed_docs.append(preprocess_text(content))
+    for doc_id, document in enumerate(documents):
+        preprocessed_text = preprocess_text(document.text)
+        document.text = preprocessed_text
+        preprocessed_docs.append(document)
     return preprocessed_docs
