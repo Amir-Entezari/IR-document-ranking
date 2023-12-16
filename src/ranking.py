@@ -72,3 +72,46 @@ class CosineScore(BaseRankingModel):
         # scores.sort(key=lambda x: x[1], reverse=True)
         # results = scores[0:5]
         return results
+
+
+class OkapiBM25(BaseRankingModel):
+    def compute_rankings(self, query, k_top, k1, k3, b, method='basic', long_length=10):
+        """
+        This function perform Okapi BM25 scoring for the given query and tune parameters and return top k relevant
+        documents. First I create a list of 2-tuples with length of all documents to score each documents according to
+        the query and set their score to zero. Then I do the exact algorithm in the slides and set the variables. And I
+        loop over all documents and calculate the formula that provided in slides, then save them in the correspond
+        index in RSV_List.
+        :parameter
+            query: str
+                The query that you want to get relevant documents.
+            k_top: int
+                Number of most relevant documents
+            long_length: int
+                bound for length of the query that determine if the query is long or not.
+        """
+        RSV_list = [[0, i + 1] for i in range(len(self.inverted_index.documents))]
+        preprocessed_query = preprocess_text(query)
+        N = self.inverted_index.collection_size
+        L_avg = np.mean([len(document.text) for document in self.inverted_index.documents])
+        L_q = len(query)
+
+        for doc_idx, document in enumerate(self.inverted_index.documents):
+            L_d = len(document.text)
+            for term in preprocessed_query:
+                t = self.inverted_index.get_term_index(term)
+                if self.inverted_index.posting_list[t].word == term:
+                    tf = document.text.count(term)
+                    df = self.inverted_index.posting_list[t].df
+                    temp = (np.log(N / df) * (k1 + 1) * tf) / \
+                           (k1 * ((1 - b) + b * (L_d / L_avg)) + tf)
+                    if L_q >= long_length and method == 'long':
+                        temp *= ((k3 + 1) * tf) / (k3 + tf)
+                    RSV_list[doc_idx][0] -= temp  # The minus is for using Max-heap
+
+        heapq.heapify(RSV_list)
+        results = []
+        for _ in range(k_top):
+            RSV, idx = heapq.heappop(RSV_list)
+            results.append([-1 * RSV, idx])
+        return results
